@@ -25,6 +25,7 @@ sys.modules.setdefault("requests", fake_requests)
 
 from netbox_whois_bridge.config import Config
 from netbox_whois_bridge.netbox import NetBoxClient
+from netbox_whois_bridge.render import pretty_print
 from netbox_whois_bridge.resolver import Resolver
 from netbox_whois_bridge.utils import is_ip_like
 
@@ -78,6 +79,28 @@ class NetboxWhoisBridgeTests(unittest.TestCase):
 
         self.assertTrue(result["_ambiguous"])
         self.assertEqual(result["matches"], ["cluster-a", "cluster-b"])
+
+    def test_pretty_print_can_emit_colorized_section_output(self):
+        output = pretty_print(
+            {
+                "type": "vm",
+                "name": "netbox",
+                "url": "https://netbox.example/virtualization/virtual-machines/8/",
+                "dns_names": ["netbox.example"],
+                "cluster": {"name": "cluster-a", "fqdn": "cluster-a.example"},
+                "host_device": "host-a",
+                "rack": {"rack": "B06", "rack_position": 43.0, "rack_face": "Front"},
+                "primary_ip4": "192.0.2.10/24",
+                "interfaces": [{"name": "eth0", "enabled": True}],
+            },
+            color=True,
+        )
+
+        self.assertIn("\033[", output)
+        self.assertIn("VM", output)
+        self.assertIn("Cluster", output)
+        self.assertIn("Network", output)
+        self.assertIn("enabled", output)
 
 
 if __name__ == "__main__":

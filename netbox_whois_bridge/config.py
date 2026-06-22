@@ -44,6 +44,7 @@ class Config:
     whois_verbose_inband: bool
     whois_show_errors: bool
     whois_output: str
+    whois_color: str
     cluster_fqdn_cf_keys: list[str]
     cluster_fqdn_suffix: str
     log_snippet_max: int
@@ -58,6 +59,9 @@ class Config:
         output = env.get("WHOIS_OUTPUT", "table").lower()
         if output not in ("table", "json"):
             raise ConfigError("WHOIS_OUTPUT must be 'table' or 'json'")
+        color = env.get("WHOIS_COLOR", "never").lower()
+        if color not in ("never", "always"):
+            raise ConfigError("WHOIS_COLOR must be 'never' or 'always'")
 
         keys = [
             item.strip()
@@ -78,6 +82,7 @@ class Config:
             whois_verbose_inband=env_bool(env, "WHOIS_VERBOSE_INBAND", False),
             whois_show_errors=env_bool(env, "WHOIS_SHOW_ERRORS", False),
             whois_output=output,
+            whois_color=color,
             cluster_fqdn_cf_keys=keys,
             cluster_fqdn_suffix=env.get("CLUSTER_FQDN_SUFFIX", "").strip(),
             log_snippet_max=env_int(env, "LOG_SNIPPET_MAX", 120, 1),

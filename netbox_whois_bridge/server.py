@@ -18,6 +18,7 @@ HELP_TEXT = (
     "  <IP address (v4/v6)>\n"
     "  <cluster name>\n"
     "Add ' json' at the end of a query for JSON output.\n"
+    "Add ' color' or ' plain' for ANSI-colored or plain text output.\n"
 )
 
 
@@ -30,6 +31,7 @@ class WhoisServer:
     def handle_client(self, conn: socket.socket, addr) -> None:
         dbg: list[str] = []
         output_mode = self.config.whois_output
+        color = self.config.whois_color == "always"
         try:
             conn.settimeout(self.config.whois_client_timeout)
             raw = self._read_query(conn)
@@ -39,9 +41,7 @@ class WhoisServer:
                 self._send_help(conn)
                 return
 
-            if line.lower().endswith(" json"):
-                output_mode = "json"
-                line = clean(line[:-5])
+            line, output_mode, color = self._parse_query_flags(line, output_mode, color)
 
             result = self.resolver.resolve_subject(line, dbg)
 
@@ -51,7 +51,7 @@ class WhoisServer:
             if output_mode == "json":
                 conn.sendall((json.dumps(result, ensure_ascii=False, sort_keys=True, indent=2) + "\n").encode())
             else:
-                conn.sendall((pretty_print(result, self.config.log_snippet_max) + "\n").encode())
+                conn.sendall((pretty_print(result, self.config.log_snippet_max, color=color) + "\n").encode())
         except Exception as exc:
             self._send_error(conn, addr, dbg, output_mode, exc)
         finally:
@@ -70,6 +70,21 @@ class WhoisServer:
             if len(buf) > self.config.whois_max_query_bytes:
                 break
         return buf
+
+    def _parse_query_flags(self, line: str, output_mode: str, color: bool) -> tuple[str, str, bool]:
+        while True:
+            lowered = line.lower()
+            if lowered.endswith(" json"):
+                output_mode = "json"
+                line = clean(line[:-5])
+            elif lowered.endswith(" color"):
+                color = True
+                line = clean(line[:-6])
+            elif lowered.endswith(" plain"):
+                color = False
+                line = clean(line[:-6])
+            else:
+                return line, output_mode, color
 
     def _send_help(self, conn: socket.socket) -> None:
         if self.config.whois_verbose_inband:

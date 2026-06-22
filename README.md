@@ -47,6 +47,7 @@ export NETBOX_VERIFY=true
 export WHOIS_BIND=0.0.0.0
 export WHOIS_PORT=43
 export WHOIS_OUTPUT=table
+export WHOIS_COLOR=never
 export WHOIS_MAX_WORKERS=20
 export WHOIS_CLIENT_TIMEOUT=30
 export WHOIS_MAX_QUERY_BYTES=8192
@@ -96,7 +97,12 @@ whois -h 127.0.0.1 -p 8043 vm-name
 whois -h 127.0.0.1 -p 8043 192.0.2.10
 whois -h 127.0.0.1 -p 8043 cluster-name
 whois -h 127.0.0.1 -p 8043 "vm-name json"
+whois -h 127.0.0.1 -p 8043 "vm-name color"
 ```
+
+Text output is plain by default for compatibility with WHOIS clients and
+scripts. Set `WHOIS_COLOR=always` to enable ANSI colors globally, or append
+`color` / `plain` to an individual query to override it.
 
 ## Tests
 
@@ -111,6 +117,8 @@ python3 -m unittest
 
 - Port 43 usually requires root privileges or a service manager capability.
 - `CACHE_TTL=0` disables the in-process response cache.
+- `WHOIS_COLOR=always` is useful for terminal clients but can add ANSI escape
+  codes to scripted output.
 - Ambiguous cluster searches return an explicit error instead of selecting the
   first fuzzy match.
 - Client-facing exceptions are generic by default. Set `WHOIS_SHOW_ERRORS=1`
