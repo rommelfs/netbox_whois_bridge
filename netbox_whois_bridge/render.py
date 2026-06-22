@@ -91,8 +91,9 @@ def _summary_line(result: dict) -> Optional[str]:
         cluster = result.get("cluster") or {}
         if cluster.get("name"):
             parts.append(f"cluster {cluster['name']}")
-        if result.get("host_device"):
-            parts.append(f"host {result['host_device']}")
+        host_display = result.get("host_device_fqdn") or result.get("host_device")
+        if host_display:
+            parts.append(f"host {host_display}")
         rack = result.get("rack") or {}
         if rack.get("rack"):
             rack_text = f"rack {rack['rack']}"
@@ -135,9 +136,11 @@ def _append_vm_sections(lines: list[str], result: dict, palette: Palette) -> Non
         _append_field(lines, palette, "FQDN", cluster.get("fqdn"))
         _append_field(lines, palette, "URL", cluster.get("url"), is_url=True)
 
-    if result.get("host_device") or result.get("host_device_url"):
+    if result.get("host_device") or result.get("host_device_fqdn") or result.get("host_device_url"):
         lines += ["", palette.heading("Host")]
         _append_field(lines, palette, "Device", result.get("host_device"))
+        if result.get("host_device_fqdn") != result.get("host_device"):
+            _append_field(lines, palette, "FQDN", result.get("host_device_fqdn"))
         _append_field(lines, palette, "URL", result.get("host_device_url"), is_url=True)
 
     rack = result.get("rack") or {}

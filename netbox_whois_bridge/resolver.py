@@ -404,6 +404,35 @@ class Resolver:
             "location": extract_name(device.get("location")),
         }
 
+    @staticmethod
+    def matching_dns_name(name: Optional[str], ips: list[dict]) -> Optional[str]:
+        if not name:
+            return None
+        if "." in name:
+            return name
+
+        candidates = []
+        for ip in ips:
+            dns_name = (ip.get("dns_name") or "").strip().rstrip(".")
+            if "." in dns_name:
+                candidates.append(dns_name)
+        if not candidates:
+            return None
+
+        lowered = name.lower()
+        for dns_name in candidates:
+            if dns_name.split(".", 1)[0].lower() == lowered:
+                return dns_name
+        return None
+
+    def device_fqdn(self, device: dict, dbg: list[str], ips: Optional[list[dict]] = None) -> Optional[str]:
+        device_id = device.get("id")
+        if ips is None:
+            if not device_id:
+                return self.matching_dns_name(device.get("name"), [])
+            ips = self.list_ips_for_device(device_id, dbg)
+        return self.matching_dns_name(device.get("name"), ips)
+
     def cluster_summary_from_stub(self, cluster_stub: Optional[dict], dbg: list[str]) -> Optional[dict]:
         if not isinstance(cluster_stub, dict):
             return None
@@ -470,6 +499,7 @@ class Resolver:
                 dns_names.add(ip["dns_name"])
 
         macs = [iface.get("mac_address") for iface in interfaces if iface.get("mac_address")]
+        host_fqdn = self.device_fqdn(host, dbg) if host else None
         result = {
             "type": "vm",
             "id": vm_id,
@@ -482,6 +512,7 @@ class Resolver:
                 "url": self.client.display_url_of(cluster),
             },
             "host_device": host.get("name") if host else None,
+            "host_device_fqdn": host_fqdn,
             "host_device_url": self.client.display_url_of(host) if host else None,
             "ips": self.summarize_ips(ips),
             "mac_addresses": sorted({mac.upper() for mac in macs}) if macs else [],
@@ -518,6 +549,9 @@ class Resolver:
         dns_names = {ip.get("dns_name") for ip in ips if ip.get("dns_name")}
         if device.get("name") and "." in device["name"]:
             dns_names.add(device["name"])
+        device_fqdn = self.device_fqdn(device, dbg, ips)
+        if device_fqdn:
+            dns_names.add(device_fqdn)
 
         result = {
             "type": "device",

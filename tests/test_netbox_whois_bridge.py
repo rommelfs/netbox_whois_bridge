@@ -35,6 +35,8 @@ class FakeClient:
         self.api_get = api_get
         self.paged_get = paged_get or (lambda path, params=None, dbg=None: [])
         self.dlog = lambda message, dbg, inband=True: None
+        self.fetch_by_url_or_id = lambda url, fallback_path, dbg: None
+        self.display_url_of = lambda obj: obj.get("display_url") if isinstance(obj, dict) else None
 
     @staticmethod
     def first_result(data):
@@ -143,6 +145,42 @@ class NetboxWhoisBridgeTests(unittest.TestCase):
             resolver.resolve_subject("cpjt1.circl.lu", []),
             {"type": "device", "name": "cpjt1"},
         )
+
+    def test_device_fqdn_can_be_discovered_from_ipam_dns(self):
+        config = Config.from_env(
+            {
+                "NETBOX_URL": "https://netbox.example",
+                "NETBOX_TOKEN": "test-token",
+            }
+        )
+
+        def fake_paged_get(path, params=None, dbg=None):
+            self.assertEqual(path, "/api/ipam/ip-addresses/")
+            self.assertEqual(params["device_id"], 1)
+            return [
+                {"dns_name": "service.example"},
+                {"dns_name": "cpjt1.circl.lu."},
+            ]
+
+        resolver = Resolver(config=config, client=FakeClient(paged_get=fake_paged_get))
+
+        self.assertEqual(resolver.device_fqdn({"id": 1, "name": "cpjt1"}, []), "cpjt1.circl.lu")
+
+    def test_vm_output_uses_host_device_fqdn_when_available(self):
+        output = pretty_print(
+            {
+                "type": "vm",
+                "name": "netbox",
+                "cluster": {"name": "CPJT1-LXC"},
+                "host_device": "cpjt1",
+                "host_device_fqdn": "cpjt1.circl.lu",
+                "host_device_url": "https://netbox.example/dcim/devices/1/",
+            }
+        )
+
+        self.assertIn("host cpjt1.circl.lu", output)
+        self.assertIn("FQDN:", output)
+        self.assertIn("cpjt1.circl.lu", output)
 
     def test_pretty_print_can_emit_colorized_section_output(self):
         output = pretty_print(
