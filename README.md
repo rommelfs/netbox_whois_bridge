@@ -77,10 +77,14 @@ Use a high port during development:
 WHOIS_PORT=8043 python3 netbox_whois_bridge.py
 ```
 
-Or use the bundled start script. It defaults `NETBOX_URL` to
-`https://netbox.circl.lu` and requires the token from the environment:
+Or use the bundled example start script. It defaults `NETBOX_URL` to
+`https://netbox.circl.lu` and requires the token from the environment. Copy it
+to `start.sh` for local deployment; `start.sh` is ignored by Git so real API
+keys or site-local changes do not collide with repository updates:
 
 ```sh
+cp start.sh.example start.sh
+chmod +x start.sh
 export NETBOX_TOKEN="..."
 ./start.sh
 ```

@@ -5,4 +5,5 @@ __pycache__/
 .venv/
 venv/
 .env
+start.sh
 .DS_Store
