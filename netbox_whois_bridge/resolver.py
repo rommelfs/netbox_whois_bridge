@@ -562,6 +562,31 @@ class Resolver:
         result["logs"] = self.collect_logs("cluster", cluster.get("id"), dbg)
         return result
 
+    def resolve_named_subject(self, value: str, dbg: list[str]) -> Optional[dict]:
+        vm = self.vm_by_name(value, dbg)
+        if vm:
+            return self.build_vm_struct(vm, dbg)
+
+        device = self.device_by_name(value, dbg)
+        if device:
+            return self.build_device_struct(device, dbg)
+
+        cluster = self.cluster_by_name(value, dbg)
+        if cluster:
+            if cluster.get("_ambiguous"):
+                matches = ", ".join(cluster.get("matches") or [])
+                suffix = f": {matches}" if matches else ""
+                return {"error": f"AMBIGUOUS {cluster.get('kind')} '{value}'{suffix}"}
+            return self.build_cluster_struct(cluster, dbg)
+        return None
+
+    @staticmethod
+    def short_name_from_fqdn(value: str) -> Optional[str]:
+        if "." not in value:
+            return None
+        short_name = value.split(".", 1)[0].strip()
+        return short_name or None
+
     def resolve_subject(self, query: str, dbg: list[str]) -> dict:
         value = clean(query)
 
@@ -581,21 +606,9 @@ class Resolver:
                     return self.build_device_struct(device, dbg)
             return {"error": f"NOTFOUND parent for ip '{value}'"}
 
-        vm = self.vm_by_name(value, dbg)
-        if vm:
-            return self.build_vm_struct(vm, dbg)
-
-        device = self.device_by_name(value, dbg)
-        if device:
-            return self.build_device_struct(device, dbg)
-
-        cluster = self.cluster_by_name(value, dbg)
-        if cluster:
-            if cluster.get("_ambiguous"):
-                matches = ", ".join(cluster.get("matches") or [])
-                suffix = f": {matches}" if matches else ""
-                return {"error": f"AMBIGUOUS {cluster.get('kind')} '{value}'{suffix}"}
-            return self.build_cluster_struct(cluster, dbg)
+        named = self.resolve_named_subject(value, dbg)
+        if named:
+            return named
 
         ips = self.ipam_find_ips_by_dns(value, dbg)
         for ip in ips:
@@ -606,5 +619,12 @@ class Resolver:
             device = self.device_from_ip(ip, dbg)
             if device:
                 return self.build_device_struct(device, dbg)
+
+        short_name = self.short_name_from_fqdn(value)
+        if short_name and short_name != value:
+            self.client.dlog(f"retry FQDN query '{value}' as short name '{short_name}'", dbg)
+            named = self.resolve_named_subject(short_name, dbg)
+            if named:
+                return named
 
         return {"error": f"NOTFOUND '{value}'"}

@@ -34,6 +34,11 @@ class FakeClient:
     def __init__(self, api_get=None, paged_get=None):
         self.api_get = api_get
         self.paged_get = paged_get or (lambda path, params=None, dbg=None: [])
+        self.dlog = lambda message, dbg, inband=True: None
+
+    @staticmethod
+    def first_result(data):
+        return data.get("results", [None])[0] if data.get("count", 0) > 0 else None
 
 
 class NetboxWhoisBridgeTests(unittest.TestCase):
@@ -111,6 +116,33 @@ class NetboxWhoisBridgeTests(unittest.TestCase):
         resolver = Resolver(config=config, client=FakeClient(paged_get=fake_paged_get))
 
         self.assertEqual(resolver.cluster_fqdn({"name": "CPJT1-LXC"}, []), "cpjt1-lxc.circl.lu")
+
+    def test_fqdn_query_falls_back_to_short_device_name(self):
+        config = Config.from_env(
+            {
+                "NETBOX_URL": "https://netbox.example",
+                "NETBOX_TOKEN": "test-token",
+            }
+        )
+
+        def fake_api_get(path, params=None, dbg=None):
+            if path == "/api/virtualization/virtual-machines/":
+                return {"count": 0, "results": []}
+            if path == "/api/dcim/devices/" and params.get("name") == "cpjt1":
+                return {"count": 1, "results": [{"id": 1, "name": "cpjt1"}]}
+            if path == "/api/dcim/devices/":
+                return {"count": 0, "results": []}
+            if path == "/api/virtualization/clusters/":
+                return {"count": 0, "results": []}
+            raise AssertionError(f"unexpected API call {path} {params}")
+
+        resolver = Resolver(config=config, client=FakeClient(api_get=fake_api_get))
+        resolver.build_device_struct = lambda device, dbg: {"type": "device", "name": device["name"]}
+
+        self.assertEqual(
+            resolver.resolve_subject("cpjt1.circl.lu", []),
+            {"type": "device", "name": "cpjt1"},
+        )
 
     def test_pretty_print_can_emit_colorized_section_output(self):
         output = pretty_print(
