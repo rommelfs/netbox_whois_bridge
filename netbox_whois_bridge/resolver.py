@@ -20,7 +20,7 @@ class Resolver:
         self.config = config
         self.client = client
 
-    def cluster_fqdn(self, cluster: dict) -> Optional[str]:
+    def cluster_fqdn(self, cluster: dict, dbg: Optional[list[str]] = None) -> Optional[str]:
         custom_fields = cluster.get("custom_fields") or {}
         for key in self.config.cluster_fqdn_cf_keys:
             value = custom_fields.get(key)
@@ -32,10 +32,37 @@ class Resolver:
             return None
         if "." in name:
             return name
+        discovered = self.cluster_fqdn_from_ipam(name, dbg)
+        if discovered:
+            return discovered
         if self.config.cluster_fqdn_suffix:
             suffix = self.config.cluster_fqdn_suffix
             return f"{name}{suffix if suffix.startswith('.') else '.' + suffix}"
-        return name
+        return None
+
+    def cluster_fqdn_from_ipam(self, name: str, dbg: Optional[list[str]]) -> Optional[str]:
+        try:
+            ips = self.client.paged_get(
+                "/api/ipam/ip-addresses/",
+                {"q": name, "limit": 20},
+                dbg,
+            )
+        except HTTPError:
+            return None
+
+        candidates = []
+        for ip in ips:
+            dns_name = (ip.get("dns_name") or "").strip().rstrip(".")
+            if "." in dns_name:
+                candidates.append(dns_name)
+        if not candidates:
+            return None
+
+        lowered = name.lower()
+        for dns_name in candidates:
+            if dns_name.split(".", 1)[0].lower() == lowered:
+                return dns_name
+        return None
 
     def ipam_find_ips_by_dns(self, dns: str, dbg: list[str]) -> list[dict]:
         return self.client.paged_get("/api/ipam/ip-addresses/", {"dns_name": dns}, dbg)
@@ -392,7 +419,7 @@ class Resolver:
         return {
             "id": cluster.get("id"),
             "name": cluster.get("name"),
-            "fqdn": self.cluster_fqdn(cluster),
+            "fqdn": self.cluster_fqdn(cluster, dbg),
             "url": self.client.display_url_of(cluster),
         }
 
@@ -450,7 +477,7 @@ class Resolver:
             "dns_names": sorted(dns_names),
             "cluster": {
                 "name": cluster.get("name") if cluster else None,
-                "fqdn": self.cluster_fqdn(cluster) if cluster else None,
+                "fqdn": self.cluster_fqdn(cluster, dbg) if cluster else None,
                 "id": cluster.get("id") if cluster else None,
                 "url": self.client.display_url_of(cluster),
             },
@@ -518,7 +545,7 @@ class Resolver:
             "type": "cluster",
             "id": cluster.get("id"),
             "name": cluster.get("name"),
-            "fqdn": self.cluster_fqdn(cluster),
+            "fqdn": self.cluster_fqdn(cluster, dbg),
             "site": extract_name(cluster.get("site")),
             "vm_count": len(vms),
             "vms": [

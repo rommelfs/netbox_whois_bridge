@@ -31,8 +31,9 @@ from netbox_whois_bridge.utils import is_ip_like
 
 
 class FakeClient:
-    def __init__(self, api_get):
+    def __init__(self, api_get=None, paged_get=None):
         self.api_get = api_get
+        self.paged_get = paged_get or (lambda path, params=None, dbg=None: [])
 
 
 class NetboxWhoisBridgeTests(unittest.TestCase):
@@ -79,6 +80,37 @@ class NetboxWhoisBridgeTests(unittest.TestCase):
 
         self.assertTrue(result["_ambiguous"])
         self.assertEqual(result["matches"], ["cluster-a", "cluster-b"])
+
+    def test_cluster_fqdn_does_not_fallback_to_plain_name(self):
+        config = Config.from_env(
+            {
+                "NETBOX_URL": "https://netbox.example",
+                "NETBOX_TOKEN": "test-token",
+            }
+        )
+        resolver = Resolver(config=config, client=FakeClient())
+
+        self.assertIsNone(resolver.cluster_fqdn({"name": "CPJT1-LXC"}, []))
+
+    def test_cluster_fqdn_can_be_discovered_from_ipam_dns(self):
+        config = Config.from_env(
+            {
+                "NETBOX_URL": "https://netbox.example",
+                "NETBOX_TOKEN": "test-token",
+            }
+        )
+
+        def fake_paged_get(path, params=None, dbg=None):
+            self.assertEqual(path, "/api/ipam/ip-addresses/")
+            self.assertEqual(params["q"], "CPJT1-LXC")
+            return [
+                {"dns_name": "other.example"},
+                {"dns_name": "cpjt1-lxc.circl.lu."},
+            ]
+
+        resolver = Resolver(config=config, client=FakeClient(paged_get=fake_paged_get))
+
+        self.assertEqual(resolver.cluster_fqdn({"name": "CPJT1-LXC"}, []), "cpjt1-lxc.circl.lu")
 
     def test_pretty_print_can_emit_colorized_section_output(self):
         output = pretty_print(
