@@ -77,6 +77,14 @@ Use a high port during development:
 WHOIS_PORT=8043 python3 netbox_whois_bridge.py
 ```
 
+Or use the bundled start script. It defaults `NETBOX_URL` to
+`https://netbox.circl.lu` and requires the token from the environment:
+
+```sh
+export NETBOX_TOKEN="..."
+./start.sh
+```
+
 Query examples:
 
 ```sh
